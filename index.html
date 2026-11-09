@@ -298,14 +298,146 @@ const CH5_Q12_URL = 'quiz/chapitre-5-parties-1-2.html';
 const CH5_Q3_URL = 'quiz/chapitre-5-partie-3.html';
 const CH5_EXTENSION_HTML = "<style>\n#chapter5QuizChooser{display:none;position:fixed;inset:0;z-index:15500;background:rgba(20,45,75,.48);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:20px}\n#chapter5QuizChooser.open{display:flex}\n.ch5qc-card{width:min(720px,94vw);background:#fff;border-radius:28px;box-shadow:0 24px 70px rgba(24,52,84,.24);overflow:hidden;border:1px solid #e4edf6}\n.ch5qc-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 22px 16px;background:linear-gradient(135deg,#fff3f7,#f4f9ff);border-bottom:1px solid #e8eef5}\n.ch5qc-head h2{margin:0;color:#173a61;font-size:26px}.ch5qc-head p{margin:4px 0 0;color:#6a7e96;font-size:14px}\n.ch5qc-close{border:0;background:#173a61;color:#fff;border-radius:14px;padding:10px 14px;font-weight:900;cursor:pointer}\n.ch5qc-options{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:22px}\n.ch5qc-option{border:1px solid #dfe8f3;border-radius:22px;padding:20px;background:linear-gradient(180deg,#eef8ff,#fff);box-shadow:0 10px 22px rgba(35,61,91,.07)}\n.ch5qc-option:last-child{background:linear-gradient(180deg,#fff3f8,#fff)}\n.ch5qc-badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#e7f2ff;color:#24527f;font-size:12px;font-weight:900;margin-bottom:10px}\n.ch5qc-option:last-child .ch5qc-badge{background:#ffe4ee;color:#9b3a62}\n.ch5qc-option h3{margin:0 0 7px;color:#173a61;font-size:20px}.ch5qc-option p{margin:0 0 16px;color:#6b7d92;font-size:14px;line-height:1.35}\n.ch5qc-start{width:100%;border:0;border-radius:14px;padding:11px 14px;background:#1671d9;color:#fff;font-weight:900;cursor:pointer}.ch5qc-option:last-child .ch5qc-start{background:#d95b91}\n@media(max-width:650px){.ch5qc-options{grid-template-columns:1fr}}\n</style>\n<div id=\"chapter5QuizChooser\" aria-hidden=\"true\"><div class=\"ch5qc-card\"><div class=\"ch5qc-head\"><div><h2>Quel quiz veux-tu faire ?</h2><p>Chapitre 5 — Les puissances</p></div><button class=\"ch5qc-close\" type=\"button\" onclick=\"closeChapter5QuizChooser()\">Fermer</button></div><div class=\"ch5qc-options\"><div class=\"ch5qc-option\"><span class=\"ch5qc-badge\">Test 1</span><h3>Parties 1 et 2</h3><p>Quiz d’entraînement sur les deux premières parties du chapitre.</p><button class=\"ch5qc-start\" type=\"button\" onclick=\"chooseChapter5Quiz('p12')\">Commencer</button></div><div class=\"ch5qc-option\"><span class=\"ch5qc-badge\">Test 2</span><h3>Partie 3</h3><p>Quiz d’entraînement consacré à la troisième partie du chapitre.</p><button class=\"ch5qc-start\" type=\"button\" onclick=\"chooseChapter5Quiz('p3')\">Commencer</button></div></div></div></div>\n<script>\n(function(){\n function norm(v){return String(v||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').trim().toLowerCase()}\n function isCh5(){return Number(window.__CHAPTER_DATA__?.n||0)===5}\n window.openChapter5QuizChooser=function(){const m=document.getElementById('chapter5QuizChooser');if(m){m.classList.add('open');m.setAttribute('aria-hidden','false')}};\n window.closeChapter5QuizChooser=function(){const m=document.getElementById('chapter5QuizChooser');if(m){m.classList.remove('open');m.setAttribute('aria-hidden','true')}};\n window.chooseChapter5Quiz=function(which){closeChapter5QuizChooser();window.parent.postMessage({type:'openChapter5Quiz',which},'*')};\n function activate(){if(!isCh5())return;document.querySelectorAll('.grid .row').forEach(row=>{const tx=norm(row.textContent);if(!tx.includes('quiz')||!tx.includes('entrainement'))return;const b=row.querySelector('button');if(b){b.disabled=false;b.style.pointerEvents='auto';b.style.cursor='pointer'}})}\n document.addEventListener('click',function(e){if(!isCh5())return;const row=e.target.closest('.grid .row');if(!row)return;const tx=norm(row.textContent);if(!tx.includes('quiz')||!tx.includes('entrainement'))return;const b=e.target.closest('button');if(!b)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openChapter5QuizChooser()},true);\n document.addEventListener('DOMContentLoaded',()=>{activate();setTimeout(activate,100);setTimeout(activate,500);const g=document.querySelector('.grid');if(g)new MutationObserver(()=>setTimeout(activate,0)).observe(g,{childList:true,subtree:true})});\n})();\n<\\/script>";
 
+
+/* Ajout ciblé : accès aux quiz externes des chapitres 6 et 7.
+   Les autres chapitres et le suivi historique restent inchangés. */
+const CONFIGURED_EXTERNAL_QUIZZES = Object.freeze({
+  6: [{key:'angles',title:'Quiz d’entraînement — Les angles',url:'quiz/chapitre-6-angles.html'}],
+  7: [
+    {key:'p15',title:'Quiz d’entraînement — Parties 1 à 5',url:'quiz/chapitre-7-parties-1-5.html'},
+    {key:'p6',title:'Quiz d’entraînement — Partie 6',url:'quiz/chapitre-7-partie-6.html'}
+  ]
+});
+const CONFIGURED_QUIZ_EXTENSION = `<style>
+#configuredQuizChooser{position:fixed;inset:0;z-index:15500;display:none;align-items:center;justify-content:center;background:rgba(20,45,75,.5);padding:18px}
+#configuredQuizChooser.open{display:flex}
+.cq-card{width:min(720px,95vw);max-height:92vh;overflow:auto;background:#fff;border-radius:22px;padding:24px;box-shadow:0 20px 55px #173a6140}
+.cq-card h2{margin:0 0 6px;color:#173a61}.cq-card p{color:#66788d;margin:0 0 17px}
+.cq-item{display:flex;justify-content:space-between;align-items:center;gap:14px;background:#f3f8ff;border:1px solid #dce8f5;border-radius:14px;padding:15px;margin:10px 0}
+.cq-item strong{color:#173a61}.cq-item button,.cq-close{border:0;border-radius:11px;padding:10px 14px;background:#173a61;color:#fff;font-weight:800;cursor:pointer}
+.cq-actions{display:flex;justify-content:flex-end;margin-top:13px}
+#configuredQuizStatus{font-size:13px;color:#8a3948;min-height:16px}
+@media(max-width:600px){.cq-item{flex-direction:column;align-items:stretch}}
+</style>
+<div id="configuredQuizChooser" role="dialog" aria-modal="true" aria-label="Choisir un quiz">
+ <div class="cq-card"><h2 id="configuredQuizTitle">Quiz d'entraînement</h2>
+ <p>Choisis l'entraînement à réaliser.</p><div id="configuredQuizItems"></div>
+ <div id="configuredQuizStatus" aria-live="polite"></div><div class="cq-actions"><button type="button" class="cq-close" id="configuredQuizClose">Fermer</button></div></div>
+</div>
+<script>
+(function(){
+ const chapterNo=Number(window.__CHAPTER_DATA__?.n||0);
+ if(chapterNo!==6&&chapterNo!==7)return;
+ const quizzes=chapterNo===6?
+  [{key:'angles',title:'Quiz d’entraînement — Les angles'}]:
+  [{key:'p15',title:'Quiz d’entraînement — Parties 1 à 5'},{key:'p6',title:'Quiz d’entraînement — Partie 6'}];
+ const modal=document.getElementById('configuredQuizChooser');
+ const options=document.getElementById('configuredQuizItems');
+ const status=document.getElementById('configuredQuizStatus');
+ const close=()=>{modal.classList.remove('open');status.textContent=''};
+ document.getElementById('configuredQuizClose').addEventListener('click',close);
+ modal.addEventListener('click',event=>{if(event.target===modal)close()});
+ options.innerHTML='';
+ quizzes.forEach(q=>{
+  const row=document.createElement('div');row.className='cq-item';
+  const label=document.createElement('strong');label.textContent=q.title;
+  const button=document.createElement('button');button.type='button';button.textContent='Commencer';
+  button.addEventListener('click',()=>{
+   status.textContent='Ouverture du quiz…';
+   window.parent.postMessage({type:'openConfiguredMathQuiz',chapter:chapterNo,key:q.key},'*');
+  });
+  row.append(label,button);options.appendChild(row);
+ });
+ window.addEventListener('message',event=>{
+  if(event.data?.type==='configuredMathQuizError')status.textContent=event.data.message||'Impossible d’ouvrir le quiz.';
+  if(event.data?.type==='configuredMathQuizOpened')close();
+ });
+ function norm(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+ document.addEventListener('click',function(event){
+  const btn=event.target.closest('button');if(!btn)return;
+  const row=btn.closest('.grid .row');if(!row)return;
+  const label=norm(row.textContent);
+  if(!label.includes('quiz')||!label.includes('entrainement'))return;
+  event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+  modal.classList.add('open');
+ },true);
+ // L'ajout des entrées Supabase se fait avec les droits du compte professeur connecté.
+ window.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>window.parent.postMessage({type:'ensureConfiguredMathQuizzes',chapter:chapterNo},'*'),650);
+ });
+})();
+<\/script>`;
+
+async function ensureConfiguredQuizRows(chapter){
+ const configs=CONFIGURED_EXTERNAL_QUIZZES[chapter];
+ if(!configs)return [];
+ let win;try{win=frame.contentWindow}catch(e){}
+ if(!win||typeof win.getChapterSessionContext!=='function')throw Error('Connexion au chapitre indisponible.');
+ const {db,profile}=await win.getChapterSessionContext();
+ if(!db||!profile)throw Error('Connecte-toi au site pour accéder aux quiz.');
+ const q=await db.from('math_quizzes').select('id,title,chapter_number,active,source_url').eq('chapter_number',chapter).eq('active',true);
+ if(q.error)throw Error('Lecture des quiz impossible : '+q.error.message);
+ const rows=q.data||[];
+ // Seul un professeur peut créer les enregistrements manquants.
+ if(profile.role==='teacher'){
+  for(const cfg of configs){
+   if(rows.some(r=>r.title===cfg.title))continue;
+   const insert=await db.from('math_quizzes').insert({chapter_number:chapter,title:cfg.title,description:null,pass_percentage:50,active:true,questions:[],source_url:cfg.url,created_by:profile.id}).select('id,title,chapter_number,active,source_url').single();
+   if(insert.error){console.warn('Initialisation du quiz :',cfg.title,insert.error.message);continue;}
+   if(insert.data)rows.push(insert.data);
+  }
+ }
+ return rows;
+}
+
+async function openConfiguredMathQuiz(chapter,key){
+ const configs=CONFIGURED_EXTERNAL_QUIZZES[chapter]||[];
+ const cfg=configs.find(q=>q.key===key);
+ if(!cfg)return;
+ let win,doc;try{win=frame.contentWindow;doc=frame.contentDocument}catch(e){}
+ const report=(type,message)=>{try{win.postMessage({type,message},'*')}catch(e){}};
+ try{
+  if(!win||!doc||Number(win.__CHAPTER_DATA__?.n)!==chapter)throw Error('Ouvre d’abord le chapitre correspondant.');
+  const rows=await ensureConfiguredQuizRows(chapter);
+  // Appariement exact. Aucun repli vers un autre quiz, pour protéger les statistiques.
+  const row=rows.find(r=>r.title===cfg.title);
+  if(!row)throw Error('Le suivi « '+cfg.title+' » n’est pas encore initialisé dans Supabase. Ouvre une fois ce chapitre avec le compte professeur pour le créer.');
+  const modal=doc.getElementById('embeddedQuizModal');
+  const quizFrame=doc.getElementById('embeddedQuizFrame');
+  const title=doc.getElementById('embeddedQuizTitle');
+  if(!modal||!quizFrame)throw Error('Fenêtre de quiz introuvable.');
+  win.__activeQuizTrackingId=row.id;
+  if(title)title.textContent=cfg.title;
+  quizFrame.removeAttribute('srcdoc');
+  const sep=cfg.url.includes('?')?'&':'?';
+  quizFrame.src=cfg.url+sep+'math_quiz_id='+encodeURIComponent(row.id);
+  modal.style.removeProperty('display');modal.setAttribute('aria-hidden','false');modal.classList.add('open');
+  report('configuredMathQuizOpened','');
+ }catch(error){console.error('Ouverture du quiz :',error);report('configuredMathQuizError',error.message||String(error));}
+}
+
 function showChapter(n,title) {
   let page = restoreScripts(CHAPTER_HTML);
   const openScript = '<scr' + 'ipt>';
+  const earlyQuizClickCapture = ([6,7].includes(Number(n))) ? `
+    document.addEventListener('click',function(event){
+      const button=event.target.closest('button');
+      const row=button?.closest('.grid .row');
+      if(!row)return;
+      const text=String(row.textContent||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      if(!text.includes('quiz')||!text.includes('entrainement'))return;
+      event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+      document.getElementById('configuredQuizChooser')?.classList.add('open');
+    },true);
+  ` : '';
   const injected = openScript + 'window.__CHAPTER_DATA__=' +
-    JSON.stringify({n:n,title:title}) + ';' + CLOSE_SCRIPT;
+    JSON.stringify({n:n,title:title}) + ';' + earlyQuizClickCapture + CLOSE_SCRIPT;
   page = page.replace('</head>', injected + '</head>');
   if(Number(n) === 5){
     page = page.replace('</body>', restoreScripts(CH5_EXTENSION_HTML) + '</body>');
+  }
+  if(Number(n) === 6 || Number(n) === 7){
+    page = page.replace('</body>', restoreScripts(CONFIGURED_QUIZ_EXTENSION) + '</body>');
   }
   frame.srcdoc = page;
 }
@@ -360,6 +492,15 @@ window.addEventListener('message', (event) => {
 
   if (data.type === 'openChapter5Quiz') {
     openChapter5Quiz(data.which);
+    return;
+  }
+
+  if (data.type === 'openConfiguredMathQuiz' && [6,7].includes(Number(data.chapter))) {
+    openConfiguredMathQuiz(Number(data.chapter),data.key);
+    return;
+  }
+  if (data.type === 'ensureConfiguredMathQuizzes' && [6,7].includes(Number(data.chapter))) {
+    ensureConfiguredQuizRows(Number(data.chapter)).catch(err=>console.warn('Initialisation différée :',err.message));
     return;
   }
 
