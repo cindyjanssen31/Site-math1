@@ -361,8 +361,37 @@ const CONFIGURED_QUIZ_EXTENSION = `<style>
   event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
   modal.classList.add('open');
  },true);
- // L'ajout des entrées Supabase se fait avec les droits du compte professeur connecté.
- window.addEventListener('DOMContentLoaded',()=>{
+ // Branche le bouton existant du chapitre, même après un rerendu des ressources.
+ // Un lien supplémentaire est visible si l'ancien bouton n'existe pas.
+ const bind=()=>{
+  const card=[...document.querySelectorAll('.grid .card')].find(c=>
+    (c.querySelector('h2')?.textContent||'').toLowerCase().includes('prépare'));
+  if(!card)return;
+  const rows=card.querySelector('.rows');if(!rows)return;
+  const existing=[...rows.querySelectorAll('.row')].find(r=>
+    r.dataset.itemId==='trainingQuiz'||
+    /quiz.*entra[iî]nement/i.test(r.textContent||''));
+  if(existing){
+   const btn=existing.querySelector('button');
+   if(btn){btn.disabled=false;btn.style.pointerEvents='auto';btn.onclick=e=>{
+     e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+     modal.classList.add('open');return false;
+   };}
+   document.getElementById('configuredQuizFallback')?.remove();
+  }else if(!document.getElementById('configuredQuizFallback')){
+   const row=document.createElement('div');row.className='row';row.id='configuredQuizFallback';
+   const label=document.createElement('div');label.className='row-left';label.textContent='Quiz d’entraînement';
+   const btn=document.createElement('button');btn.type='button';btn.textContent='Commencer';btn.className='open-btn';
+   btn.addEventListener('click',()=>modal.classList.add('open'));
+   row.append(label,btn);rows.append(row);
+  }
+ };
+ document.addEventListener('DOMContentLoaded',()=>{
+  bind();setTimeout(bind,250);setTimeout(bind,1000);
+  const grid=document.querySelector('.grid');
+  if(grid){let queued=false;new MutationObserver(()=>{
+   if(queued)return;queued=true;setTimeout(()=>{queued=false;bind()},70);
+  }).observe(grid,{childList:true,subtree:true});}
   setTimeout(()=>window.parent.postMessage({type:'ensureConfiguredMathQuizzes',chapter:chapterNo},'*'),650);
  });
 })();
@@ -371,19 +400,27 @@ const CONFIGURED_QUIZ_EXTENSION = `<style>
 async function ensureConfiguredQuizRows(chapter){
  const configs=CONFIGURED_EXTERNAL_QUIZZES[chapter];
  if(!configs)return [];
- let win;try{win=frame.contentWindow}catch(e){}
- if(!win||typeof win.getChapterSessionContext!=='function')throw Error('Connexion au chapitre indisponible.');
+ const win=frame.contentWindow;
+ if(!win||typeof win.getChapterSessionContext!=='function')throw Error('La session du chapitre ne peut pas être chargée.');
  const {db,profile}=await win.getChapterSessionContext();
- if(!db||!profile)throw Error('Connecte-toi au site pour accéder aux quiz.');
- const q=await db.from('math_quizzes').select('id,title,chapter_number,active,source_url').eq('chapter_number',chapter).eq('active',true);
- if(q.error)throw Error('Lecture des quiz impossible : '+q.error.message);
+ if(!db||!profile)throw Error('Connexion Supabase non détectée. Vérifie que tu es connecté(e) au site depuis son adresse en ligne.');
+ // Ne sélectionner que les colonnes effectivement utilisées par le système de suivi d'origine.
+ const q=await db.from('math_quizzes').select('id,title,chapter_number,active').eq('chapter_number',chapter).eq('active',true);
+ if(q.error)throw Error('Lecture de math_quizzes refusée : '+q.error.message);
  const rows=q.data||[];
- // Seul un professeur peut créer les enregistrements manquants.
  if(profile.role==='teacher'){
   for(const cfg of configs){
    if(rows.some(r=>r.title===cfg.title))continue;
-   const insert=await db.from('math_quizzes').insert({chapter_number:chapter,title:cfg.title,description:null,pass_percentage:50,active:true,questions:[],source_url:cfg.url,created_by:profile.id}).select('id,title,chapter_number,active,source_url').single();
-   if(insert.error){console.warn('Initialisation du quiz :',cfg.title,insert.error.message);continue;}
+   // Création avec les seuls champs nécessaires; aucune hypothèse sur une colonne source_url.
+   const insert=await db.from('math_quizzes')
+    .insert({chapter_number:chapter,title:cfg.title,pass_percentage:50,active:true,questions:[]})
+    .select('id,title,chapter_number,active').single();
+   if(insert.error){
+    const error='Création de « '+cfg.title+' » refusée par Supabase : '+insert.error.message;
+    console.error(error);
+    try{win.postMessage({type:'configuredMathQuizError',message:error},'*')}catch(e){}
+    continue;
+   }
    if(insert.data)rows.push(insert.data);
   }
  }
@@ -391,29 +428,35 @@ async function ensureConfiguredQuizRows(chapter){
 }
 
 async function openConfiguredMathQuiz(chapter,key){
- const configs=CONFIGURED_EXTERNAL_QUIZZES[chapter]||[];
- const cfg=configs.find(q=>q.key===key);
+ const cfg=(CONFIGURED_EXTERNAL_QUIZZES[chapter]||[]).find(q=>q.key===key);
  if(!cfg)return;
- let win,doc;try{win=frame.contentWindow;doc=frame.contentDocument}catch(e){}
+ const win=frame.contentWindow, doc=frame.contentDocument;
  const report=(type,message)=>{try{win.postMessage({type,message},'*')}catch(e){}};
  try{
-  if(!win||!doc||Number(win.__CHAPTER_DATA__?.n)!==chapter)throw Error('Ouvre d’abord le chapitre correspondant.');
-  const rows=await ensureConfiguredQuizRows(chapter);
-  // Appariement exact. Aucun repli vers un autre quiz, pour protéger les statistiques.
-  const row=rows.find(r=>r.title===cfg.title);
-  if(!row)throw Error('Le suivi « '+cfg.title+' » n’est pas encore initialisé dans Supabase. Ouvre une fois ce chapitre avec le compte professeur pour le créer.');
+  if(!win||!doc||Number(win.__CHAPTER_DATA__?.n)!==chapter)throw Error('Le chapitre n’est pas ouvert.');
   const modal=doc.getElementById('embeddedQuizModal');
   const quizFrame=doc.getElementById('embeddedQuizFrame');
-  const title=doc.getElementById('embeddedQuizTitle');
-  if(!modal||!quizFrame)throw Error('Fenêtre de quiz introuvable.');
-  win.__activeQuizTrackingId=row.id;
-  if(title)title.textContent=cfg.title;
+  const label=doc.getElementById('embeddedQuizTitle');
+  if(!modal||!quizFrame)throw Error('La fenêtre des quiz est introuvable.');
+  win.__activeQuizTrackingId=null;
+  if(label)label.textContent=cfg.title;
   quizFrame.removeAttribute('srcdoc');
-  const sep=cfg.url.includes('?')?'&':'?';
-  quizFrame.src=cfg.url+sep+'math_quiz_id='+encodeURIComponent(row.id);
-  modal.style.removeProperty('display');modal.setAttribute('aria-hidden','false');modal.classList.add('open');
+  quizFrame.src=cfg.url;
+  modal.style.removeProperty('display');
+  modal.setAttribute('aria-hidden','false');
+  modal.classList.add('open');
   report('configuredMathQuizOpened','');
- }catch(error){console.error('Ouverture du quiz :',error);report('configuredMathQuizError',error.message||String(error));}
+  // Le suivi Supabase est indépendant de l'ouverture visuelle du quiz.
+  // Il doit être résolu sans fermer la fenêtre en cas d'échec.
+  try{
+    const rows=await ensureConfiguredQuizRows(chapter);
+    if(win.__CHAPTER_DATA__?.n===chapter && quizFrame.getAttribute('src')===cfg.url){
+      const row=rows.find(r=>r.title===cfg.title);
+      win.__activeQuizTrackingId=row?.id||null;
+      if(!row)console.warn('Quiz ouvert, mais sans fiche de suivi Supabase :',cfg.title);
+    }
+  }catch(err){console.warn('Suivi du quiz non disponible :',err.message);}
+ }catch(err){console.error('Ouverture quiz :',err);report('configuredMathQuizError',err.message||String(err));}
 }
 
 function showChapter(n,title) {
